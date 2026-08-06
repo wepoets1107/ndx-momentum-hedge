@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>纳斯达克100动量对冲策略</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Noto Sans SC', -apple-system, 'Microsoft YaHei', sans-serif;
+    background: #f5f7fa; color: #1a2332; padding: 28px 20px;
+  }
+  .container { max-width: 1360px; margin: 0 auto; }
+
+  .header {
+    background: linear-gradient(135deg, #1a2332 0%, #2a3a5c 100%);
+    color: #fff; border-radius: 14px; padding: 24px 32px;
+    margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-end;
+  }
+  .header h1 { font-size: 22px; font-weight: 600; letter-spacing: 1px; }
+  .header .sub { font-size: 13px; color: #8899bb; margin-top: 4px; }
+  .header .date { font-size: 14px; color: #aabbdd; }
+
+  .summary-row {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px;
+  }
+  .summary-card {
+    background: #fff; border-radius: 10px; padding: 16px; text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05); border: 1px solid #eef0f4;
+  }
+  .summary-card .label { font-size: 12px; color: #8899aa; margin-bottom: 8px; }
+  .summary-card .value { font-size: 18px; font-weight: 700; }
+  .summary-card .detail { font-size: 11px; color: #aabbcc; margin-top: 6px; line-height: 1.6; }
+  .green { color: #27ae60; } .red { color: #e74c3c; } .blue { color: #2980b9; }
+
+  .section-title {
+    font-size: 16px; font-weight: 600; color: #1a2332; margin: 24px 0 12px;
+  }
+
+  .table-wrapper {
+    background: #fff; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+    overflow-x: auto; border: 1px solid #eef0f4; margin-bottom: 20px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: #f0f2f6; padding: 10px 10px; font-weight: 600; font-size: 12px;
+    color: #4a5a7a; text-align: center; border-bottom: 2px solid #dce0e8; white-space: nowrap;
+  }
+  thead th:first-child { padding-left: 14px; }
+  tbody td {
+    padding: 8px 10px; text-align: center; border-bottom: 1px solid #f0f2f6;
+    vertical-align: middle;
+  }
+  tbody td:first-child { padding-left: 14px; font-weight: 600; color: #4a5a7a; }
+  tbody tr:hover { background: #f8faff; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .tag-add { background: #e8f5e9; color: #27ae60; padding: 2px 10px; border-radius: 3px; font-weight: 600; font-size: 12px; }
+  .tag-remove { background: #fdecea; color: #e74c3c; padding: 2px 10px; border-radius: 3px; font-weight: 600; font-size: 12px; }
+  .tag-keep { background: #e3f2fd; color: #1565c0; padding: 2px 10px; border-radius: 3px; font-weight: 600; font-size: 12px; }
+
+  .up { color: #27ae60; font-weight: 600; }
+  .down { color: #e74c3c; font-weight: 600; }
+
+  .footer { text-align: center; margin-top: 16px; font-size: 12px; color: #99aabb; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  @media (max-width: 768px) {
+    .summary-row { grid-template-columns: repeat(3, 1fr); }
+    .two-col { grid-template-columns: 1fr; }
+    .header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+<div class="header">
+  <div>
+    <h1>纳斯达克100动量对冲策略</h1>
+    <div class="sub">K=5 动量选股 + PSQ 等名义对冲 · 周频调仓</div>
+  </div>
+  <div class="date" id="header-date">加载中...</div>
+</div>
+
+<div class="summary-row">
+  <div class="summary-card">
+    <div class="label">股票池</div>
+    <div class="value blue" id="pool-size">-</div>
+    <div class="detail">只</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">本周动量 Top5</div>
+    <div class="detail" id="top5-detail" style="font-size:13px;line-height:1.8"></div>
+  </div>
+  <div class="summary-card">
+    <div class="label">策略本周</div>
+    <div class="value" id="strategy-w">-</div>
+    <div class="detail">股票+PSQ对冲后</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">QQQ 本周</div>
+    <div class="value" id="qqq-w">-</div>
+    <div class="detail">基准对照</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">PSQ 本周</div>
+    <div class="value" id="psq-w">-</div>
+    <div class="detail">对冲端</div>
+  </div>
+</div>
+
+<div class="two-col">
+  <div>
+    <div class="section-title">当前持仓</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th>排名</th><th>代码</th><th>20日动量</th><th>5日动量</th><th>现价</th><th>权重</th></tr></thead>
+        <tbody id="holdings-tbody"><tr><td colspan="6" style="color:#999;">加载中...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div>
+    <div class="section-title">调仓变动</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th>类型</th><th>代码</th><th>动量</th></tr></thead>
+        <tbody id="changes-tbody"><tr><td colspan="3" style="color:#999;">加载中...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section-title">历史回测（2021-2026 · 5.5年）</div>
+<div class="table-wrapper">
+  <table>
+    <thead><tr><th>年份</th><th>策略收益</th><th>QQQ收益</th><th>超额</th></tr></thead>
+    <tbody id="backtest-tbody"><tr><td colspan="4" style="color:#999;">加载中...</td></tr></tbody>
+  </table>
+</div>
+<div class="summary-row" id="backtest-summary" style="margin-bottom:20px;"></div>
+
+<div class="section-title">动量排名 Top30</div>
+<div class="table-wrapper" style="max-height:500px;overflow-y:auto;">
+  <table>
+    <thead><tr><th>排名</th><th>代码</th><th>20日动量</th><th>现价</th></tr></thead>
+    <tbody id="momentum-tbody"><tr><td colspan="4" style="color:#999;">加载中...</td></tr></tbody>
+  </table>
+</div>
+
+<div class="footer">数据来源 Yahoo Finance + Backpack · 每小时自动刷新 · 纯研究参考，不构成投资建议</div>
+</div>
+
+<script>
+const SNAP = {"date": "2026-08-05", "week_start": "2026-07-29", "pool_size": 80, "momentum_top5": [{"symbol": "PLTR", "momentum": 22.8, "momentum_5d": 28.8, "price": 158.43, "rank": 4}, {"symbol": "MSFT", "momentum": 26.8, "momentum_5d": 24.8, "price": 487.46, "rank": 1}, {"symbol": "AMZN", "momentum": 10.4, "momentum_5d": 20.3, "price": 272.65, "rank": 16}, {"symbol": "MDB", "momentum": 3.7, "momentum_5d": 17.2, "price": 376.36, "rank": 36}, {"symbol": "CRWD", "momentum": 5.8, "momentum_5d": 17.0, "price": 209.86, "rank": 31}], "week_top5": [{"symbol": "MRVL", "momentum_5d": 29.1, "price": 211.02}, {"symbol": "PLTR", "momentum_5d": 28.8, "price": 158.43}, {"symbol": "MSFT", "momentum_5d": 24.8, "price": 487.46}, {"symbol": "INTC", "momentum_5d": 23.4, "price": 101.06}, {"symbol": "AMAT", "momentum_5d": 22.4, "price": 534.24}], "top_symbols": ["PLTR", "MSFT", "AMZN", "MDB", "CRWD"], "changes": {"added": [], "removed": [], "kept": ["PLTR", "MSFT", "AMZN", "MDB", "CRWD"]}, "performance": {"strategy_w": 8.5, "qqq_w": 4.9, "psq_w": -4.7}, "qqq_12w": [{"date": "2026-06-08", "qqq": 715.283935546875, "psq": 25.820999145507812}, {"date": "2026-06-11", "qqq": 716.332763671875, "psq": 25.78135108947754}, {"date": "2026-06-16", "qqq": 729.0587768554688, "psq": 25.285747528076172}, {"date": "2026-06-22", "qqq": 737.9500122070312, "psq": 24.998294830322266}, {"date": "2026-06-25", "qqq": 716.3800048828125, "psq": 25.739999771118164}, {"date": "2026-06-30", "qqq": 736.4000244140625, "psq": 25.059999465942383}, {"date": "2026-07-06", "qqq": 722.8200073242188, "psq": 25.520000457763672}, {"date": "2026-07-09", "qqq": 723.280029296875, "psq": 25.510000228881836}, {"date": "2026-07-14", "qqq": 719.6900024414062, "psq": 25.6299991607666}, {"date": "2026-07-17", "qqq": 695.3300170898438, "psq": 26.540000915527344}, {"date": "2026-07-22", "qqq": 705.3499755859375, "psq": 26.18000030517578}, {"date": "2026-07-27", "qqq": 682.1199951171875, "psq": 27.079999923706055}, {"date": "2026-07-30", "qqq": 683.5499877929688, "psq": 26.989999771118164}, {"date": "2026-08-04", "qqq": 723.8499755859375, "psq": 25.469999313354492}], "full_momentum": [{"symbol": "MSFT", "momentum": 26.8, "momentum_5d": 24.8, "price": 487.46, "rank": 1}, {"symbol": "TEAM", "momentum": 24.9, "momentum_5d": 8.7, "price": 113.32, "rank": 2}, {"symbol": "WDAY", "momentum": 23.3, "momentum_5d": 1.6, "price": 170.64, "rank": 3}, {"symbol": "PLTR", "momentum": 22.8, "momentum_5d": 28.8, "price": 158.43, "rank": 4}, {"symbol": "INTU", "momentum": 20.0, "momentum_5d": -1.6, "price": 327.94, "rank": 5}, {"symbol": "BKNG", "momentum": 17.9, "momentum_5d": 2.8, "price": 207.02, "rank": 6}, {"symbol": "ADBE", "momentum": 16.5, "momentum_5d": -1.6, "price": 259.32, "rank": 7}, {"symbol": "REGN", "momentum": 15.1, "momentum_5d": 10.5, "price": 768.58, "rank": 8}, {"symbol": "ROST", "momentum": 14.8, "momentum_5d": 0.5, "price": 253.22, "rank": 9}, {"symbol": "CTAS", "momentum": 13.3, "momentum_5d": -7.0, "price": 201.4, "rank": 10}, {"symbol": "DXCM", "momentum": 13.2, "momentum_5d": 10.0, "price": 82.66, "rank": 11}, {"symbol": "PAYX", "momentum": 12.5, "momentum_5d": -3.2, "price": 118.27, "rank": 12}, {"symbol": "AMGN", "momentum": 12.2, "momentum_5d": 5.2, "price": 407.83, "rank": 13}, {"symbol": "ADP", "momentum": 11.9, "momentum_5d": -1.2, "price": 270.09, "rank": 14}, {"symbol": "ROP", "momentum": 10.8, "momentum_5d": -3.3, "price": 394.53, "rank": 15}, {"symbol": "AMZN", "momentum": 10.4, "momentum_5d": 20.3, "price": 272.65, "rank": 16}, {"symbol": "ZS", "momentum": 9.9, "momentum_5d": 5.1, "price": 161.65, "rank": 17}, {"symbol": "ORLY", "momentum": 9.8, "momentum_5d": 3.1, "price": 93.44, "rank": 18}, {"symbol": "GEHC", "momentum": 8.6, "momentum_5d": -2.3, "price": 70.24, "rank": 19}, {"symbol": "FAST", "momentum": 8.4, "momentum_5d": 4.6, "price": 49.99, "rank": 20}, {"symbol": "PCAR", "momentum": 8.2, "momentum_5d": -0.4, "price": 133.34, "rank": 21}, {"symbol": "NVDA", "momentum": 8.1, "momentum_5d": 15.4, "price": 219.22, "rank": 22}, {"symbol": "BKR", "momentum": 7.8, "momentum_5d": 5.0, "price": 61.67, "rank": 23}, {"symbol": "DASH", "momentum": 7.8, "momentum_5d": 7.1, "price": 207.27, "rank": 24}, {"symbol": "MDLZ", "momentum": 7.4, "momentum_5d": -3.7, "price": 62.6, "rank": 25}, {"symbol": "PANW", "momentum": 7.2, "momentum_5d": 15.4, "price": 362.66, "rank": 26}, {"symbol": "MELI", "momentum": 6.3, "momentum_5d": 3.2, "price": 1922.57, "rank": 27}, {"symbol": "CMCSA", "momentum": 6.0, "momentum_5d": 0.6, "price": 24.75, "rank": 28}, {"symbol": "LULU", "momentum": 6.0, "momentum_5d": 3.8, "price": 123.51, "rank": 29}, {"symbol": "PDD", "momentum": 5.9, "momentum_5d": 3.0, "price": 90.94, "rank": 30}], "backtest": {"method": "方案B (20d>0过滤 + 5d排序)", "period": "2021-06-07 → 2026-08-06", "total_return": 508.5, "qqq_return": 116.8, "sharpe": 2.35, "qqq_sharpe": 0.57, "max_drawdown": 9.0, "qqq_max_drawdown": 35.1, "final_value": 60850.0, "qqq_final_value": 21685.0, "annual": {"2021": {"strategy": 23.4, "qqq": -16.9}, "2022": {"strategy": 30.9, "qqq": -16.9}, "2023": {"strategy": 35.6, "qqq": -16.9}, "2024": {"strategy": 40.0, "qqq": -16.9}, "2025": {"strategy": 39.6, "qqq": -16.9}, "2026": {"strategy": 42.2, "qqq": -16.9}}, "yearly": [{"year": "2021", "strategy": 22.5, "qqq": 17.0}, {"year": "2022", "strategy": 26.9, "qqq": -29.4}, {"year": "2023", "strategy": 35.8, "qqq": 53.4}, {"year": "2024", "strategy": 41.4, "qqq": 31.5}, {"year": "2025", "strategy": 33.4, "qqq": 21.5}, {"year": "2026(至8月)", "strategy": 42.2, "qqq": 14.7}], "strategy_values": [10000, 10225.0, 11022.0, 11107.0, 11414.0, 11605.0, 12273.0, 12255.0, 12260.0, 12715.0, 12641.0, 12635.0, 13154.0, 13360.0, 13727.0, 13318.0, 13622.0, 14120.0, 14683.0, 14984.0, 15624.0, 15754.0, 16189.0, 16752.0, 16729.0, 16962.0, 18749.0, 19076.0, 19711.0, 20328.0, 20509.0, 20491.0, 21626.0, 21820.0, 22280.0, 23734.0, 24169.0, 24890.0, 25435.0, 25747.0, 26063.0, 24935.0, 26314.0, 26601.0, 26820.0, 29768.0, 30705.0, 30983.0, 30382.0, 30573.0, 31082.0, 31221.0, 32862.0, 34086.0, 35383.0, 35479.0, 38550.0, 41141.0, 40025.0, 40364.0, 44148.0, 46439.0, 46306.0, 47014.0, 56670.0, 59445.0, 62463.0, 58951.0], "qqq_values": [10000.0, 10592.0, 10798.0, 11195.0, 10579.0, 11341.0, 11490.0, 11673.0, 10343.0, 10043.0, 10337.0, 9965.0, 8891.0, 8505.0, 8713.0, 9492.0, 8708.0, 7899.0, 8311.0, 8480.0, 7921.0, 8375.0, 8922.0, 9046.0, 9452.0, 9644.0, 10519.0, 10882.0, 11054.0, 11219.0, 10660.0, 10275.0, 11590.0, 12176.0, 12564.0, 12844.0, 12944.0, 13091.0, 13204.0, 13829.0, 14844.0, 13425.0, 14249.0, 14583.0, 14839.0, 15153.0, 15539.0, 15656.0, 16149.0, 14393.0, 13656.0, 14665.0, 15925.0, 16735.0, 16664.0, 17161.0, 17951.0, 18588.0, 17773.0, 18586.0, 18737.0, 18154.0, 17906.0, 18453.0, 21478.0, 21291.0, 21543.0, 20799.0]}, "all_holdings": [{"symbol": "PLTR", "momentum": 22.8, "momentum_5d": 28.8, "price": 158.43}, {"symbol": "MSFT", "momentum": 26.8, "momentum_5d": 24.8, "price": 487.46}, {"symbol": "AMZN", "momentum": 10.4, "momentum_5d": 20.3, "price": 272.65}, {"symbol": "MDB", "momentum": 3.7, "momentum_5d": 17.2, "price": 376.36}, {"symbol": "CRWD", "momentum": 5.8, "momentum_5d": 17.0, "price": 209.86}]};
+const TOP_K = 5;
+
+function fmt(num, d) { return typeof num==='number' ? num.toFixed(d||1) : (num||'-'); }
+function cls(val) { return val>0?'up':(val<0?'down':''); }
+
+(function render() {
+  const d = SNAP;
+  if (!d || d.error) { document.body.innerHTML = '<p style="text-align:center;padding:60px;color:#999;">数据加载中，请稍后刷新…</p>'; return; }
+
+  document.getElementById('header-date').textContent = d.date || '-';
+  document.getElementById('pool-size').textContent = d.pool_size || '-';
+
+  // Top5 本周动量（按5日排序，独立于持仓）
+  const top5 = d.week_top5 || d.momentum_top5 || [];
+  document.getElementById('top5-detail').innerHTML = top5.map(m=>
+    '<div><b>'+m.symbol+'</b> <span class="'+(m.momentum_5d>0?'up':'down')+'">'+fmt(m.momentum_5d)+'%</span></div>'
+  ).join('');
+
+  // Strategy week
+  const strat = d.performance?.strategy_w;
+  const elStrat = document.getElementById('strategy-w');
+  elStrat.textContent = (strat!=null ? (strat>0?'+':'')+fmt(strat)+'%' : '-');
+  elStrat.className = 'value ' + (strat>0?'green':(strat<0?'red':''));
+
+  const qqqW = d.performance?.qqq_w;
+  const elQqq = document.getElementById('qqq-w');
+  elQqq.textContent = (qqqW!=null ? (qqqW>0?'+':'')+fmt(qqqW)+'%' : '-');
+  elQqq.className = 'value ' + (qqqW>0?'green':(qqqW<0?'red':''));
+
+  const psqW = d.performance?.psq_w;
+  const elPsq = document.getElementById('psq-w');
+  elPsq.textContent = (psqW!=null ? (psqW>0?'+':'')+fmt(psqW)+'%' : '-');
+  elPsq.className = 'value ' + (psqW>0?'green':(psqW<0?'red':''));
+
+  // Holdings table
+  const h = d.all_holdings || top5;
+  document.getElementById('holdings-tbody').innerHTML = h.map((m,i)=>
+    '<tr><td>'+(i+1)+'</td><td><b>'+m.symbol+'</b></td>'+
+    '<td class="'+(m.momentum>0?'up':'down')+'">'+fmt(m.momentum)+'%</td>'+
+    '<td class="'+(m.momentum_5d>0?'up':(m.momentum_5d<0?'down':''))+'">'+(m.momentum_5d!=null?fmt(m.momentum_5d)+'%':'-')+'</td>'+
+    '<td>'+fmt(m.price,2)+'</td><td>'+fmt(100/TOP_K||20,0)+'%</td></tr>'
+  ).join('') || '<tr><td colspan="6" style="color:#999;">无数据</td></tr>';
+
+  // Changes table — 只有新增或剔除时才逐条列，否则显示"无变化"
+  const ch = d.changes || {};
+  let changeRows = '';
+  (ch.added||[]).forEach(c=>{ changeRows += '<tr><td><span class="tag-add">新增</span></td><td><b>'+c.symbol+'</b></td><td class="up">'+fmt(c.momentum)+'%</td></tr>'; });
+  (ch.removed||[]).forEach(c=>{ changeRows += '<tr><td><span class="tag-remove">剔除</span></td><td><b>'+c+'</b></td><td>-</td></tr>'; });
+  if ((ch.added||[]).length > 0 || (ch.removed||[]).length > 0) {
+    (ch.kept||[]).forEach(c=>{ changeRows += '<tr><td><span class="tag-keep">持有</span></td><td><b>'+c+'</b></td><td>-</td></tr>'; });
+  }
+  document.getElementById('changes-tbody').innerHTML = changeRows || '<tr><td colspan="3" style="color:#999;">持仓无变化</td></tr>';
+
+  // Backtest display
+  const bt = d.backtest;
+  if (bt) {
+    let btRows = '';
+    (bt.yearly||[]).forEach(y => {
+      const alpha = y.strategy - y.qqq;
+      btRows += '<tr><td><b>'+y.year+'</b></td>'+
+        '<td class="'+(y.strategy>0?'up':'down')+'">'+(y.strategy>0?'+':'')+fmt(y.strategy)+'%</td>'+
+        '<td class="'+(y.qqq>0?'up':'down')+'">'+(y.qqq>0?'+':'')+fmt(y.qqq)+'%</td>'+
+        '<td class="'+(alpha>0?'up':'down')+'">'+(alpha>0?'+':'')+fmt(alpha)+'%</td></tr>';
+    });
+    document.getElementById('backtest-tbody').innerHTML = btRows;
+    const cagr = ((bt.final_value||58951)/10000)**(1/5.5)-1;
+    document.getElementById('backtest-summary').innerHTML =
+      '<div class="summary-card"><div class="label">5.5年总收益</div><div class="value '+(bt.total_return>0?'green':'red')+'">'+(bt.total_return>0?'+':'')+bt.total_return+'%</div><div class="detail">年化CAGR '+fmt(cagr*100,1)+'%</div></div>'+
+      '<div class="summary-card"><div class="label">QQQ总收益</div><div class="value '+(bt.qqq_return>0?'green':'red')+'">'+(bt.qqq_return>0?'+':'')+bt.qqq_return+'%</div><div class="detail">年化CAGR '+fmt((((bt.qqq_final_value||21683)/10000)**(1/5.5)-1)*100,1)+'%</div></div>'+
+      '<div class="summary-card"><div class="label">策略夏普</div><div class="value blue">'+bt.sharpe+'</div></div>'+
+      '<div class="summary-card"><div class="label">QQQ夏普</div><div class="value blue">'+bt.qqq_sharpe+'</div></div>'+
+      '<div class="summary-card"><div class="label">最大回撤</div><div class="value red">'+bt.max_drawdown+'%</div><div class="detail">QQQ '+bt.qqq_max_drawdown+'%</div></div>'+
+      '<div class="summary-card"><div class="label">终值($1万起)</div><div class="value blue">$'+(bt.final_value||58951).toLocaleString()+'</div><div class="detail">QQQ $'+(bt.qqq_final_value||21683).toLocaleString()+'</div></div>';
+  }
+
+  // Momentum full list
+  const full = d.full_momentum || [];
+  document.getElementById('momentum-tbody').innerHTML = full.map(m=>
+    '<tr><td>'+m.rank+'</td><td><b>'+m.symbol+'</b></td>'+
+    '<td class="'+(m.momentum>0?'up':'down')+'">'+fmt(m.momentum)+'%</td>'+
+    '<td>'+fmt(m.price,2)+'</td></tr>'
+  ).join('') || '<tr><td colspan="4" style="color:#999;">无数据</td></tr>';
+
+})();
+</script>
+</body>
+</html>
