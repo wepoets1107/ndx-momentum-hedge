@@ -225,6 +225,7 @@ function cls(val) { return val>0?'up':(val<0?'down':''); }
       '<div class="summary-card"><div class="label">QQQ总收益</div><div class="value '+(bt.qqq_return>0?'green':'red')+'">'+(bt.qqq_return>0?'+':'')+bt.qqq_return+'%</div><div class="detail">年化CAGR '+fmt((((bt.qqq_final_value||21683)/10000)**(1/5.5)-1)*100,1)+'%</div></div>'+
       '<div class="summary-card"><div class="label">策略夏普</div><div class="value blue">'+bt.sharpe+'</div></div>'+
       '<div class="summary-card"><div class="label">QQQ夏普</div><div class="value blue">'+bt.qqq_sharpe+'</div></div>'+
+      '<div class="summary-card"><div class="label">策略卡玛</div><div class="value '+(bt.calmar>1?'green':'blue')+'">'+bt.calmar+'</div><div class="detail">QQQ '+bt.qqq_calmar+'</div></div>'+
       '<div class="summary-card"><div class="label">最大回撤</div><div class="value red">'+bt.max_drawdown+'%</div><div class="detail">QQQ '+bt.qqq_max_drawdown+'%</div></div>'+
       '<div class="summary-card"><div class="label">终值($1万起)</div><div class="value blue">$'+(bt.final_value||58951).toLocaleString()+'</div><div class="detail">QQQ $'+(bt.qqq_final_value||21683).toLocaleString()+'</div></div>';
   }
