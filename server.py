@@ -185,8 +185,8 @@ def build_report():
         "top_symbols": sorted_top_symbols,
         "changes": {
             "added": [{"symbol": s, "momentum": next((m["momentum"] for m in top_k if m["symbol"]==s),0)} for s in sorted_added],
-            "removed": sorted(removed),
-            "kept": sorted_kept,
+            "removed": [{"symbol": s, "momentum": next((m["momentum"] for m in momentum_list if m["symbol"]==s), None)} for s in sorted(removed)],
+            "kept": [{"symbol": s, "momentum": next((m["momentum"] for m in top_k if m["symbol"]==s),0)} for s in sorted_kept],
         },
         "performance": {
             "strategy_w": strat_w,

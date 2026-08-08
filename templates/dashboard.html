@@ -201,9 +201,9 @@ function cls(val) { return val>0?'up':(val<0?'down':''); }
   const ch = d.changes || {};
   let changeRows = '';
   (ch.added||[]).forEach(c=>{ changeRows += '<tr><td><span class="tag-add">新增</span></td><td><b>'+c.symbol+'</b></td><td class="up">'+fmt(c.momentum)+'%</td></tr>'; });
-  (ch.removed||[]).forEach(c=>{ changeRows += '<tr><td><span class="tag-remove">剔除</span></td><td><b>'+c+'</b></td><td>-</td></tr>'; });
+  (ch.removed||[]).forEach(c=>{ changeRows += '<tr><td><span class="tag-remove">剔除</span></td><td><b>'+c.symbol+'</b></td><td class="'+(c.momentum>0?'up':(c.momentum<0?'down':''))+'">'+(c.momentum!=null?fmt(c.momentum)+'%':'-')+'</td></tr>'; });
   if ((ch.added||[]).length > 0 || (ch.removed||[]).length > 0) {
-    (ch.kept||[]).forEach(c=>{ changeRows += '<tr><td><span class="tag-keep">持有</span></td><td><b>'+c+'</b></td><td>-</td></tr>'; });
+    (ch.kept||[]).forEach(c=>{ changeRows += '<tr><td><span class="tag-keep">持有</span></td><td><b>'+c.symbol+'</b></td><td class="'+(c.momentum>0?'up':(c.momentum<0?'down':''))+'">'+(c.momentum!=null?fmt(c.momentum)+'%':'-')+'</td></tr>'; });
   }
   document.getElementById('changes-tbody').innerHTML = changeRows || '<tr><td colspan="3" style="color:#999;">持仓无变化</td></tr>';
 

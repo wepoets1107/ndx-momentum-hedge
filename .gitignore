@@ -4,3 +4,4 @@ __pycache__/
 *.log
 *.pkl
 .cache_*
+report_cache.json
